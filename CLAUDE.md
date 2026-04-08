@@ -149,6 +149,7 @@ VAL is the C++ reference validator. PyVAL aims for output-format similarity (not
 - Test against both classical and numeric domains.
 - Diagnostic messages follow templates in `VALIDATOR_SPEC.md` section "Diagnostic Message Guidelines".
 - CLI interface mirrors VAL's `Validate` command for familiarity.
+- **Update `CHANGELOG.md`** after every implementation milestone (new module, feature, or fix). Keep entries under `[Unreleased]` until a version is tagged.
 
 ## Testing
 
@@ -159,3 +160,28 @@ pytest tests/ -k "syntax"      # Syntax validation tests
 ```
 
 Cross-validate results against VAL on IPC benchmark domains when possible.
+
+## Test Data Sources
+
+AMLGym benchmarks at `/Users/omereliyahu/personal/AMLGym/amlgym/benchmarks/` provide:
+- **25 classical PDDL domains** in `domains/` (blocksworld, driverlog, rovers, satellite, logistics, etc.)
+- **Problem files** in `problems/solving/<domain>/` and `problems/learning/<domain>/`
+- All are classical (`:strips :typing`) — no numeric domains. Create custom test PDDL for numeric validation.
+
+## Plan File Parsing Reference
+
+IPC plan format (the format PyVAL must accept):
+```
+(action_name param1 param2)
+(action_name param1 param2 param3)
+; cost = 42 (general cost)
+```
+- Lines starting with `;` are comments
+- UPF can parse plans: `reader.parse_plan(problem, plan_path)` → `SequentialPlan`
+- For richer diagnostics, PyVAL should parse plan lines manually to control error messages, then construct `ActionInstance(action_schema, tuple(objects))` for simulation.
+
+## Cross-Reference: Related Codebases
+
+Two sibling repos contain production UPF usage patterns worth referencing:
+- **online_model_learning** (`../online_model_learning`) — `active_environment.py` has the closest pattern to PyVAL's plan simulation (`SequentialSimulator` + `is_applicable` + `apply` + goal checking)
+- **AMLGym** (`../AMLGym`) — `UPEnv.py` shows state conversion and action application, `_solving.py` shows plan validation with `PlanValidator`

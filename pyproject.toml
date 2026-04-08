@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyval"
+version = "0.1.0"
+description = "Pure Python PDDL plan validator"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "unified-planning>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+copilot = ["pddl-plus-parser"]
+
+[project.scripts]
+pyval = "pyval.cli:main"
