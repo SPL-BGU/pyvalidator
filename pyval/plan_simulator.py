@@ -18,10 +18,10 @@ def simulate(
     action_instances: list[ActionInstance],
     original_names: dict[str, str],
     tracked_fluents: list[str] | None = None,
-) -> tuple[list[StepResult], list[StateSnapshot], list[GoalResult], dict[str, list]]:
+) -> tuple[list[StepResult], list[StateSnapshot], list[GoalResult], dict[str, list], dict | None]:
     """Simulate plan execution step-by-step.
 
-    Returns (steps, trajectory, goal_results, numeric_trajectory).
+    Returns (steps, trajectory, goal_results, numeric_trajectory, metric).
     """
     # Suppress UPF warnings about unsupported problem kinds
     with warnings.catch_warnings():
@@ -79,13 +79,37 @@ def simulate(
             break
 
     goal_results = check_goals(problem, state)
+    metric = _evaluate_metric(problem, state)
 
     return (
         steps,
         tracker._snapshots,
         goal_results,
         tracker.get_numeric_trajectory(),
+        metric,
     )
+
+
+def _evaluate_metric(problem: Problem, final_state) -> dict | None:
+    """Evaluate plan quality metric against the final state."""
+    from unified_planning.model.metrics import (
+        MinimizeExpressionOnFinalState,
+        MaximizeExpressionOnFinalState,
+    )
+
+    for metric in problem.quality_metrics:
+        if isinstance(metric, (MinimizeExpressionOnFinalState, MaximizeExpressionOnFinalState)):
+            try:
+                value = final_state.get_value(metric.expression)
+                kind = "minimize" if isinstance(metric, MinimizeExpressionOnFinalState) else "maximize"
+                return {
+                    "type": kind,
+                    "expression": str(metric.expression),
+                    "value": float(value.constant_value()),
+                }
+            except Exception:
+                return None
+    return None
 
 
 def _compute_changes(

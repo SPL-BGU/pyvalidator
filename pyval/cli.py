@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from pyval import __version__
 from pyval.report_formatter import format_json, format_plain_text, format_trajectory
 from pyval.validator import PDDLValidator
 
@@ -36,7 +37,7 @@ def main() -> None:
         help="Track specific numeric fluent (repeatable)",
     )
     parser.add_argument(
-        "--version", action="version", version="pyval 0.1.0"
+        "--version", action="version", version=f"pyval {__version__}"
     )
 
     args = parser.parse_args()

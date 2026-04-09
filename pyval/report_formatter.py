@@ -93,6 +93,13 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
     if result.steps:
         lines.append(f"Plan length: {len(result.steps)} actions")
 
+    # Metric
+    if result.metric:
+        lines.append(
+            f"Plan metric: {result.metric['type']} {result.metric['expression']} "
+            f"= {result.metric['value']}"
+        )
+
     # Numeric summary
     if result.numeric_trajectory:
         numeric_finals = {}
@@ -173,6 +180,10 @@ def format_json(result: ValidationResult) -> dict:
         output["phases"]["goals"] = goals if goals else None
     else:
         output["phases"]["goals"] = None
+
+    # Metric
+    if result.metric:
+        output["metric"] = result.metric
 
     return output
 

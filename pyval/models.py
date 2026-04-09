@@ -57,6 +57,7 @@ class ValidationResult:
     failed_step: int | None = None
     unsatisfied_goals: list[GoalResult] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    metric: dict | None = None  # {"type": "minimize"/"maximize", "expression": str, "value": float}
 
     def report(self, verbose: bool = False) -> str:
         from pyval.report_formatter import format_plain_text

@@ -72,7 +72,7 @@ class PDDLValidator:
         # Phase 3: Plan Execution
         from pyval.plan_simulator import simulate
 
-        steps, trajectory, goal_results, numeric_traj = simulate(
+        steps, trajectory, goal_results, numeric_traj, metric = simulate(
             problem, action_instances, original_names, tracked_fluents
         )
 
@@ -101,6 +101,7 @@ class PDDLValidator:
             failed_step=failed_step,
             unsatisfied_goals=unsatisfied_goals,
             warnings=all_warnings,
+            metric=metric,
         )
 
 

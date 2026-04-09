@@ -25,10 +25,30 @@ def check_syntax(
         errors.append(_format_parse_error(exc, domain_path, problem_path))
         return {"status": "FAIL", "errors": errors, "warnings": warnings}, None
 
-    # Post-parse checks: warn on uninitialized numeric functions
+    # Post-parse checks
+    warnings.extend(_check_unsupported_requirements(problem))
     warnings.extend(_check_numeric_initialization(problem))
 
     return {"status": "PASS", "errors": errors, "warnings": warnings}, problem
+
+
+def _check_unsupported_requirements(problem: Problem) -> list[str]:
+    """Warn about PDDL features that pyvalidator cannot simulate correctly."""
+    warnings = []
+    kind = problem.kind
+
+    if kind.has_time():
+        warnings.append(
+            "Domain uses durative/temporal actions which pyvalidator does not support. "
+            "Validation results may be incorrect."
+        )
+    if kind.has_events() or kind.has_processes():
+        warnings.append(
+            "Domain uses PDDL+ features (processes/events) which pyvalidator does not support. "
+            "Validation results may be incorrect."
+        )
+
+    return warnings
 
 
 def _format_parse_error(
