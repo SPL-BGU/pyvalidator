@@ -6,6 +6,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-04-11
+
+### Fixed
+- Plan structure validation now honors PDDL type hierarchies. Objects whose
+  type is a transitive subtype of an action parameter's declared type are
+  accepted (e.g., an object typed `depot` satisfies a `place` parameter when
+  the domain declares `depot - place`). Previously the `is_compatible` check
+  was called with swapped arguments, rejecting every typed IPC benchmark
+  (depots, driverlog, rovers, ...) at the structure phase.
+
+### Added
+- Regression tests (`tests/test_validator.py`) with a small `vhcl` domain
+  exercising both positive (subtype accepted) and negative (sibling branch
+  rejected) cases, plus matching fixtures in `tests/conftest.py`.
+
 ## [0.1.1] — 2026-04-09
 
 ### Added

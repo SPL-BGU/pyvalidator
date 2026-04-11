@@ -6,6 +6,10 @@ from tests.conftest import (
     BLOCKSWORLD_VALID_PLAN,
     LOGISTICS_FUEL_DOMAIN,
     LOGISTICS_FUEL_PROBLEM,
+    TYPED_HIERARCHY_DOMAIN,
+    TYPED_HIERARCHY_PROBLEM,
+    TYPED_HIERARCHY_SIBLING_PLAN,
+    TYPED_HIERARCHY_SUBTYPE_PLAN,
     write_pddl_files,
 )
 
@@ -84,6 +88,39 @@ def test_empty_plan(tmp_path):
     result = v.validate(paths["domain"], paths["problem"], paths["plan"])
     # Phase 2 passes, Phase 3 determines if goals are satisfied
     assert result.phases["structure"]["status"] == "PASS"
+
+
+def test_subtype_object_accepted_for_supertype_parameter(tmp_path):
+    """Action parameter typed `vehicle` must accept a `truck` (subtype)."""
+    paths = write_pddl_files(
+        tmp_path,
+        TYPED_HIERARCHY_DOMAIN,
+        TYPED_HIERARCHY_PROBLEM,
+        TYPED_HIERARCHY_SUBTYPE_PLAN,
+    )
+    v = PDDLValidator()
+    result = v.validate(paths["domain"], paths["problem"], paths["plan"])
+    assert result.phases["structure"]["status"] == "PASS", (
+        result.phases["structure"]["errors"]
+    )
+
+
+def test_sibling_type_rejected_for_parameter(tmp_path):
+    """An object from a sibling branch (cargo) must NOT satisfy a vehicle parameter."""
+    paths = write_pddl_files(
+        tmp_path,
+        TYPED_HIERARCHY_DOMAIN,
+        TYPED_HIERARCHY_PROBLEM,
+        TYPED_HIERARCHY_SIBLING_PLAN,
+    )
+    v = PDDLValidator()
+    result = v.validate(paths["domain"], paths["problem"], paths["plan"])
+    assert not result.is_valid
+    assert result.status == "STRUCTURE_ERROR"
+    assert any(
+        "expects type 'vehicle'" in e and "box1" in e
+        for e in result.phases["structure"]["errors"]
+    )
 
 
 def test_comment_and_cost_lines_skipped(tmp_path):

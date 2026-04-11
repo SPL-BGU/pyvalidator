@@ -172,6 +172,60 @@ LOGISTICS_FUEL_INVALID_PLAN = """\
 
 
 # ---------------------------------------------------------------------------
+# Typed hierarchy: vehicles + cargo (for subtype compatibility checks)
+# ---------------------------------------------------------------------------
+
+TYPED_HIERARCHY_DOMAIN = """\
+(define (domain vhcl)
+  (:requirements :strips :typing)
+  (:types
+    vehicle cargo - object
+    truck plane - vehicle)
+  (:predicates
+    (parked ?v - vehicle)
+    (stored ?c - cargo)
+  )
+
+  (:action start
+    :parameters (?v - vehicle)
+    :precondition (parked ?v)
+    :effect (not (parked ?v))
+  )
+)
+"""
+
+TYPED_HIERARCHY_PROBLEM = """\
+(define (problem vhcl-p1)
+  (:domain vhcl)
+  (:objects
+    truck1 - truck
+    plane1 - plane
+    box1 - cargo
+  )
+  (:init
+    (parked truck1)
+    (parked plane1)
+    (stored box1)
+  )
+  (:goal (and (not (parked truck1)) (not (parked plane1))))
+)
+"""
+
+# Subtype plan: (start truck1) passes a `truck` where `vehicle` is expected.
+# Must be accepted — PDDL typing is hierarchical.
+TYPED_HIERARCHY_SUBTYPE_PLAN = """\
+(start truck1)
+(start plane1)
+"""
+
+# Sibling-branch plan: (start box1) passes a `cargo` where `vehicle` is
+# expected. Must be rejected — cargo is not in vehicle's subtree.
+TYPED_HIERARCHY_SIBLING_PLAN = """\
+(start box1)
+"""
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

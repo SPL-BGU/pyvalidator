@@ -170,7 +170,10 @@ def _validate_plan_structure(
             original_names[obj.name] = param_name_raw
 
             expected_type = action_schema.parameters[i].type
-            if not obj.type.is_compatible(expected_type):
+            # `Type.is_compatible(self, other)` returns True iff an object of
+            # type `other` can be assigned to a slot of type `self`. The
+            # parameter type is the target, so it must be on the left.
+            if not expected_type.is_compatible(obj.type):
                 errors.append(
                     f"Step {step_idx}: Action '{action_name_raw}' — "
                     f"parameter {i + 1} expects type '{expected_type}', "
