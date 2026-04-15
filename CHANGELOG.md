@@ -6,6 +6,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-04-15
+
+### Added
+- `README.md` with install instructions, CLI usage, Python API, and pipeline overview
+- `readme = "README.md"` in `pyproject.toml` so the README renders on PyPI
+
 ## [0.1.2] — 2026-04-11
 
 ### Fixed
