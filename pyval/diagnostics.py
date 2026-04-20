@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unified_planning.model import FNode, OperatorKind
+from unified_planning.model.walkers import StateEvaluator
 
 from pyval.models import GoalResult, PreconditionFailure
 
@@ -26,8 +27,9 @@ def decompose_preconditions(
 def check_goals(problem, state) -> list[GoalResult]:
     """Evaluate all goals against a state, return results for each."""
     results: list[GoalResult] = []
+    evaluator = StateEvaluator(problem)
     for goal in problem.goals:
-        _evaluate_goal(goal, state, results)
+        _evaluate_goal(goal, state, results, evaluator)
     return results
 
 
@@ -180,63 +182,49 @@ def _op_symbol(op: OperatorKind) -> str:
     }.get(op, "?")
 
 
-def _evaluate_goal(expr: FNode, state, results: list[GoalResult]) -> None:
-    """Evaluate a single goal expression, decomposing ANDs."""
+def _evaluate_goal(expr: FNode, state, results: list[GoalResult], evaluator) -> None:
+    """Evaluate a single goal expression, decomposing ANDs.
+
+    Uses UPF's StateEvaluator — unlike `state.get_value`, it handles constants,
+    arithmetic sub-expressions, NOT, and comparisons uniformly.
+    """
     if expr.node_type == OperatorKind.AND:
         for arg in expr.args:
-            _evaluate_goal(arg, state, results)
+            _evaluate_goal(arg, state, results, evaluator)
         return
 
-    try:
-        val = state.get_value(expr)
-        if val.is_bool_constant():
-            satisfied = val.is_true()
-            results.append(GoalResult(
-                expression=str(expr),
-                satisfied=satisfied,
-                current_values={str(expr): satisfied},
-            ))
-        else:
-            # Numeric goal (comparison)
-            satisfied = val.is_true() if val.is_bool_constant() else False
-            results.append(GoalResult(
-                expression=str(expr),
-                satisfied=satisfied,
-                current_values={str(expr): val.constant_value() if not val.is_bool_constant() else satisfied},
-            ))
-    except Exception:
-        # For complex expressions (comparisons), try to evaluate directly
-        satisfied = _evaluate_goal_expr(expr, state)
-        results.append(GoalResult(
-            expression=str(expr),
-            satisfied=satisfied,
-            current_values={},
-        ))
-
-
-def _evaluate_goal_expr(expr: FNode, state) -> bool:
-    """Evaluate a goal expression that may be a comparison."""
     if expr.node_type in (OperatorKind.LE, OperatorKind.LT, OperatorKind.EQUALS):
+        satisfied, current_values = _evaluate_comparison_goal(expr, state, evaluator)
+    else:
+        satisfied = False
         try:
-            left_val = state.get_value(expr.args[0]).constant_value()
-            right_val = state.get_value(expr.args[1]).constant_value()
-            return _check_comparison(expr.node_type, left_val, right_val)
+            val = evaluator.evaluate(expr, state)
+            if val.is_bool_constant():
+                satisfied = val.is_true()
         except Exception:
-            return False
+            pass
+        current_values = {str(expr): satisfied}
 
-    if expr.node_type == OperatorKind.NOT:
-        inner = expr.args[0]
-        try:
-            val = state.get_value(inner)
-            return val.is_false()
-        except Exception:
-            return False
+    results.append(GoalResult(
+        expression=str(expr),
+        satisfied=satisfied,
+        current_values=current_values,
+    ))
 
+
+def _evaluate_comparison_goal(expr: FNode, state, evaluator) -> tuple[bool, dict]:
     try:
-        val = state.get_value(expr)
-        return val.is_true()
+        left_val = float(evaluator.evaluate(expr.args[0], state).constant_value())
+        right_val = float(evaluator.evaluate(expr.args[1], state).constant_value())
     except Exception:
-        return False
+        return (False, {})
+    satisfied = _check_comparison(expr.node_type, left_val, right_val)
+    current_values: dict = {}
+    if expr.args[0].is_fluent_exp():
+        current_values[str(expr.args[0])] = left_val
+    if expr.args[1].is_fluent_exp():
+        current_values[str(expr.args[1])] = right_val
+    return (satisfied, current_values)
 
 
 def _substitute(expr: FNode, param_map: dict) -> FNode:

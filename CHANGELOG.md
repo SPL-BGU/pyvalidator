@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-04-20
+
+### Fixed
+- Numeric comparison goals (`<=`, `>=`, `=`) were always reported as unsatisfied,
+  even when satisfied. `_evaluate_goal` in `pyval/diagnostics.py` branched on
+  `state.get_value(expr).is_bool_constant()`, which returned a non-bool FNode
+  (and no exception) for comparisons — the `else` branch then set `satisfied =
+  False` unconditionally. Additionally, `state.get_value` asserts on constant
+  and arithmetic sub-expressions (e.g. `(+ (foo) 1)`), so even the fallback path
+  could not evaluate `(<= 5 (foo))` or `(<= (+ (foo) 1) (bar))`. Replaced with
+  UPF's `StateEvaluator`, which uniformly handles constants, arithmetic, NOT,
+  and comparisons. Boolean-goal domains are unaffected. Numeric-goal domains
+  (e.g. IPC `counters/p01`, `farmland/p01`) now validate correctly.
+
+### Added
+- `tests/test_numeric_goals.py` covering `<=`, `>=`, `=`, arithmetic LHS, and
+  mixed boolean/numeric conjunctions, plus skip-guarded regression tests against
+  `counters/p01` and `farmland/p01` from `pddl-copilot-experiments`.
+
 ## [0.1.3] — 2026-04-15
 
 ### Added
