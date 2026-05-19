@@ -23,13 +23,13 @@ pyval/
 ├── report_formatter.py # Output formatting (plain text, JSON, trajectory table)
 └── models.py           # Dataclasses: ValidationResult, StepResult, etc.
 tests/
-├── domains/            # Test PDDL files (classical + numeric)
-└── ...
+├── conftest.py         # Shared PDDL fixtures (inline strings)
+└── test_*.py           # Module-level tests
 ```
 
 ## Specification
 
-`VALIDATOR_SPEC.md` is the authoritative reference. It defines the 3-phase pipeline, output formats, data models, and diagnostic templates. Read it before making design decisions.
+This file (`CLAUDE.md`) is the authoritative reference for architecture, pipeline phases, and conventions. Data-model shapes are defined in `pyval/models.py`; diagnostic templates live in `pyval/diagnostics.py` and `pyval/report_formatter.py`. JSON output schema is whatever `ValidationResult.to_json()` produces. Read these before making design decisions.
 
 ## Architecture
 
@@ -46,8 +46,8 @@ tests/
 
 ### Output Modes
 
-- **Plain text** (default) — VAL-like verbose output, optimized for LLM consumption.
-- **Structured JSON** — Machine-readable, see spec for schema.
+- **Plain text** (default) — VAL-like verbose output, optimized for LLM consumption. When no plan is provided (syntax-only validation), the report omits the `Plan is VALID/INVALID` verdict and the `Goal Check` block, and emits a single success line instead (since no plan was executed).
+- **Structured JSON** — Machine-readable; schema is whatever `ValidationResult.to_json()` (in `pyval/models.py`) emits.
 - **State trajectory** — Numeric fluent values at each plan step.
 
 ## Domain Knowledge for AI Agents
@@ -147,7 +147,7 @@ VAL is the C++ reference validator. PyVAL aims for output-format similarity (not
 - Pure Python, zero compiled dependencies. Must stay `pip install`-able.
 - Use `unified-planning` for all PDDL parsing and simulation — do not write custom parsers.
 - Test against both classical and numeric domains.
-- Diagnostic messages follow templates in `VALIDATOR_SPEC.md` section "Diagnostic Message Guidelines".
+- Diagnostic messages are generated in `pyval/diagnostics.py` and `pyval/report_formatter.py` — follow the existing templates there (precondition deficit reporting, repair-oriented messages, no leaking "Plan is VALID" when no plan was executed).
 - CLI interface mirrors VAL's `Validate` command for familiarity.
 - **Update `CHANGELOG.md`** after every implementation milestone (new module, feature, or fix). Keep entries under `[Unreleased]` until a version is tagged.
 

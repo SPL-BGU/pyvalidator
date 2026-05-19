@@ -25,6 +25,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   semantics: no `"Plan is VALID/INVALID"`, no `"Goal Check"`, and the new
   success line present.
 
+### Removed
+- `VALIDATOR_SPEC.md` — content was redundant with `CLAUDE.md` and the inline
+  module docs/diagnostic templates in `pyval/`. `CLAUDE.md` is now the single
+  authoritative architecture reference; data-model shapes are documented by
+  `pyval/models.py` and the JSON schema by `ValidationResult.to_json()`.
+
 ## [0.1.4] — 2026-04-20
 
 ### Fixed

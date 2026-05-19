@@ -76,7 +76,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-See `VALIDATOR_SPEC.md` for the full specification and `CLAUDE.md` for architecture notes.
+See `CLAUDE.md` for architecture notes and the validation pipeline overview.
 
 ## License
 
