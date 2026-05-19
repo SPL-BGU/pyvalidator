@@ -115,6 +115,11 @@ def test_plain_text_syntax_error(tmp_path):
     text = format_plain_text(result)
     assert "SYNTAX_ERROR" in text
     assert "[ERROR]" in text
+    # Regression guard: a syntax-error result must never emit a plan verdict
+    # — no plan was executed, no goals were checked.
+    assert "Plan is VALID" not in text
+    assert "Plan is INVALID" not in text
+    assert "Goal Check" not in text
 
 
 def test_plain_text_syntax_only_success_domain_and_problem(classical_files):
