@@ -68,26 +68,34 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
                         lines.append(f"    Deficit: {failure.deficit} units")
         lines.append("")
 
-    # Goal check
-    lines.append("=== Goal Check ===")
-    if result.is_valid:
-        lines.append("All goals satisfied. Plan is VALID.")
-    else:
-        if result.failed_step is not None:
-            total = result.phases.get("execution", {}).get("total_steps", "?")
-            lines.append(
-                f"Plan is INVALID. Failed at step {result.failed_step} of {total}."
-            )
-            remaining = int(total) - result.failed_step if isinstance(total, int) else "?"
-            lines.append(f"Remaining actions not executed: {remaining}")
-        elif result.unsatisfied_goals:
-            lines.append("Plan executed but goals are NOT satisfied.")
-            for goal in result.unsatisfied_goals:
-                lines.append(f"  Unmet goal: {goal.expression}")
-                for k, v in goal.current_values.items():
-                    lines.append(f"    Current value: {v}")
+    # Goal check — only when Phase 3 (plan execution) actually ran.
+    # Syntax-only calls (validate_syntax) never simulate a plan; emitting
+    # "Plan is VALID/INVALID" there is a misleading verdict on something
+    # that was not checked.
+    if "execution" in result.phases:
+        lines.append("=== Goal Check ===")
+        if result.is_valid:
+            lines.append("All goals satisfied. Plan is VALID.")
         else:
-            lines.append(f"Plan is {result.status}.")
+            if result.failed_step is not None:
+                total = result.phases.get("execution", {}).get("total_steps", "?")
+                lines.append(
+                    f"Plan is INVALID. Failed at step {result.failed_step} of {total}."
+                )
+                remaining = int(total) - result.failed_step if isinstance(total, int) else "?"
+                lines.append(f"Remaining actions not executed: {remaining}")
+            elif result.unsatisfied_goals:
+                lines.append("Plan executed but goals are NOT satisfied.")
+                for goal in result.unsatisfied_goals:
+                    lines.append(f"  Unmet goal: {goal.expression}")
+                    for k, v in goal.current_values.items():
+                        lines.append(f"    Current value: {v}")
+            else:
+                lines.append(f"Plan is {result.status}.")
+    elif result.is_valid:
+        lines.append(
+            "All syntax and consistency checks passed. No plan was executed."
+        )
 
     # Summary
     if result.steps:
