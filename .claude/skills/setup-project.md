@@ -15,7 +15,7 @@ description: Bootstrap the pyvalidator project structure. Creates pyproject.toml
    - Entry point: `[project.scripts] pyval = "pyval.cli:main"`
    - Include license, description, author metadata
 
-2. **Create `pyval/` package** (all modules from VALIDATOR_SPEC.md):
+2. **Create `pyval/` package** (modules per `CLAUDE.md`'s "Project Structure" section):
    ```
    pyval/__init__.py          # Public API: PDDLValidator, ValidationResult
    pyval/cli.py               # CLI entry point
@@ -55,7 +55,7 @@ description: Bootstrap the pyvalidator project structure. Creates pyproject.toml
 
 ## Rules
 
-- Follow VALIDATOR_SPEC.md for all module names and data model shapes
+- Follow `CLAUDE.md` for module names and the pipeline structure; data-model shapes come from `pyval/models.py`
 - Python >= 3.10 (for `match` statements and `X | Y` type union syntax)
 - `models.py` should be implemented first — other modules depend on its dataclasses
 - All `__init__.py` files should export public API names

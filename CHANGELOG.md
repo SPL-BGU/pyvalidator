@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-05-19
+
+### Fixed
+- Plain-text report no longer claims `"All goals satisfied. Plan is VALID."`
+  on syntax-only calls (`validate_syntax(domain[, problem])`). The "Goal Check"
+  block in `pyval/report_formatter.py` ran unconditionally whenever
+  `is_valid=True`, even though no plan had been executed and no goal had been
+  checked. The block is now gated on `"execution" in result.phases`; the
+  syntax-only success path emits a single accurate line instead:
+  `"All syntax and consistency checks passed. No plan was executed."`.
+  Downstream consumers that previously string-stripped the leaked verdict
+  (pddl-copilot's `pddl-validator` plugin v2.2.0) can drop that workaround.
+
+### Added
+- `tests/test_report_formatter.py::test_plain_text_syntax_only_success_domain_and_problem`
+  and `::test_plain_text_syntax_only_success_domain_only` lock in the no-plan
+  semantics: no `"Plan is VALID/INVALID"`, no `"Goal Check"`, and the new
+  success line present.
+
+### Removed
+- `VALIDATOR_SPEC.md` — content was redundant with `CLAUDE.md` and the inline
+  module docs/diagnostic templates in `pyval/`. `CLAUDE.md` is now the single
+  authoritative architecture reference; data-model shapes are documented by
+  `pyval/models.py` and the JSON schema by `ValidationResult.to_json()`.
+
 ## [0.1.4] — 2026-04-20
 
 ### Fixed

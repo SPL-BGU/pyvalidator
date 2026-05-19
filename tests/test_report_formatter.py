@@ -115,3 +115,38 @@ def test_plain_text_syntax_error(tmp_path):
     text = format_plain_text(result)
     assert "SYNTAX_ERROR" in text
     assert "[ERROR]" in text
+    # Regression guard: a syntax-error result must never emit a plan verdict
+    # — no plan was executed, no goals were checked.
+    assert "Plan is VALID" not in text
+    assert "Plan is INVALID" not in text
+    assert "Goal Check" not in text
+
+
+def test_plain_text_syntax_only_success_domain_and_problem(classical_files):
+    """validate_syntax(domain, problem) on clean PDDL must not claim a plan
+    verdict — no plan was executed."""
+    v = PDDLValidator()
+    result = v.validate_syntax(
+        classical_files["domain"], classical_files["problem"]
+    )
+    text = format_plain_text(result)
+    assert "Plan is VALID" not in text
+    assert "Plan is INVALID" not in text
+    assert "Goal Check" not in text
+    assert (
+        "All syntax and consistency checks passed. No plan was executed." in text
+    )
+
+
+def test_plain_text_syntax_only_success_domain_only(classical_files):
+    """validate_syntax(domain) on a clean domain must not claim a plan
+    verdict — no plan was executed."""
+    v = PDDLValidator()
+    result = v.validate_syntax(classical_files["domain"])
+    text = format_plain_text(result)
+    assert "Plan is VALID" not in text
+    assert "Plan is INVALID" not in text
+    assert "Goal Check" not in text
+    assert (
+        "All syntax and consistency checks passed. No plan was executed." in text
+    )

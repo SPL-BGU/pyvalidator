@@ -12,9 +12,10 @@ For the task described in $ARGUMENTS:
 ### Phase 1: Explore
 1. Read all relevant existing code using Grep and Glob
 2. Identify existing patterns that can be reused — especially:
-   - `pyval/models.py` for data model contracts
+   - `pyval/models.py` for data model contracts (and `to_json()` for the JSON output schema)
    - `pyval/validator.py` for pipeline orchestration patterns
-   - `VALIDATOR_SPEC.md` for output format and diagnostic templates
+   - `pyval/report_formatter.py` and `pyval/diagnostics.py` for output format and diagnostic templates
+   - `CLAUDE.md` for the architectural overview and conventions
 3. Check all modules under `pyval/` to understand cross-module impact
 4. Review `.claude/rules/` for validation semantics and UPF gotchas
 5. **Run `python3 -m pytest tests/ -v`** to verify baseline test state before planning changes
@@ -23,7 +24,7 @@ For the task described in $ARGUMENTS:
 Design the implementation approach covering:
 - **Objective**: One sentence describing the goal
 - **Analysis**: Current state, what needs to change, existing code to reuse
-- **Spec alignment**: Which sections of VALIDATOR_SPEC.md are affected?
+- **Reference alignment**: Which sections of `CLAUDE.md` (or which `pyval/` modules) are affected? Do output formats or diagnostic templates need updates in `report_formatter.py` / `diagnostics.py`?
 - **Pipeline phase**: Which phase does this change belong to? (Phase 1: syntax_checker, Phase 2: validator, Phase 3: plan_simulator, or cross-cutting: models/diagnostics/report_formatter)
 - **Models impact**: Does this change the models.py dataclass shapes? If so, which downstream modules break?
 - **Files to modify**: Table of file | action (create/modify/delete) | description
@@ -45,10 +46,10 @@ Before presenting the plan, review it for simplification and correctness:
 - Does `models.py` remain the single source of truth for data shapes?
 - Does the change avoid duplicating logic across pipeline phases?
 
-**Spec conformance:**
-- Do output formats match VALIDATOR_SPEC.md templates?
-- Do diagnostic messages follow the "Diagnostic Message Guidelines" section?
-- Do data models match the spec's dataclass definitions?
+**Reference conformance:**
+- Do output formats match the existing templates in `pyval/report_formatter.py`?
+- Do diagnostic messages follow the existing patterns in `pyval/diagnostics.py` (precondition deficits, repair advice, no leaking "Plan is VALID" when no plan was executed)?
+- Do data models match the dataclass definitions in `pyval/models.py`?
 - Does the CLI interface stay compatible with VAL's `Validate` command?
 
 **UPF correctness:**
