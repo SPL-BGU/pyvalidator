@@ -4,9 +4,12 @@ description: Review current plan or code changes for unnecessary complexity, pip
 context: fork
 agent: simplifier
 argument-hint: [description of what to review]
+paths: pyval/**, tests/**
 ---
 
 Review the current work for unnecessary complexity and correctness.
+
+> **Layering with bundled `/code-review`:** As of Claude Code v2.1.147, bundled `/code-review` (formerly `/simplify`) handles general correctness at the chosen effort level (e.g. `/code-review high`). This skill adds project-specific concerns the bundled reviewer cannot know: UPF gotchas, pipeline phase boundaries, models.py contract, diagnostic-template conformance. Run both — `/code-review high` first or in parallel.
 
 $ARGUMENTS
 
