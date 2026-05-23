@@ -3,7 +3,7 @@ name: simplifier
 description: Reviews plans and code for unnecessary complexity, UPF misuse, pipeline-phase drift, and models.py contract violations. Use after planning or before committing multi-file changes.
 tools: Read, Grep, Glob
 model: opus
-effort: high
+effort: xhigh
 permissionMode: plan
 maxTurns: 10
 ---
