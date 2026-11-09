@@ -81,8 +81,16 @@ def _check_numeric_initialization(problem: Problem) -> list[str]:
     fuel(t2)"), which used to abort validation with a traceback. The check is
     per ground instance, not per declared name, because initialising
     ``(fuel t1)`` says nothing about ``(fuel t2)``.
+
+    Only instances that matter are reported: a function an action *writes* must
+    have a value for every object it ranges over (the effect raises otherwise),
+    and a function with no initial value at all is reported as a whole. A static
+    table such as ``(distance ?a ?b)`` is routinely specified only for the pairs
+    that exist, so partial coverage there is not a defect — if a plan reads a
+    missing pair, the step reports it by name.
     """
     warnings: list[str] = []
+    modified = _functions_written_by_actions(problem)
 
     for fluent in problem.fluents:
         if not (fluent.type.is_int_type() or fluent.type.is_real_type()):
@@ -90,19 +98,33 @@ def _check_numeric_initialization(problem: Problem) -> list[str]:
 
         instances = _ground_instances(problem, fluent)
         if instances is None:
-            warnings.append(
-                f"Numeric function '{fluent.name}' has more than "
-                f"{_MAX_GROUND_INSTANCES} ground instances, so it was not "
-                f"cross-checked against :init. No default value is assumed: "
-                f"any instance that :init leaves out has no value in the state."
-            )
+            if fluent.name in modified:
+                warnings.append(
+                    f"Numeric function '{fluent.name}' has more than "
+                    f"{_MAX_GROUND_INSTANCES} ground instances, so it was not "
+                    f"cross-checked against :init. No default value is assumed: "
+                    f"any instance that :init leaves out has no value in the state."
+                )
             continue
 
         missing = [expr for expr in instances if expr not in problem.initial_values]
-        if missing:
+        if not missing:
+            continue
+        if fluent.name in modified or len(missing) == len(instances):
             warnings.append(_missing_init_warning(fluent.name, missing, len(instances)))
 
     return warnings
+
+
+def _functions_written_by_actions(problem: Problem) -> set[str]:
+    """Names of the functions some action effect assigns or updates."""
+    names: set[str] = set()
+    for action in problem.actions:
+        for effect in action.effects:
+            fluent_expression = getattr(effect, "fluent", None)
+            if fluent_expression is not None and fluent_expression.is_fluent_exp():
+                names.add(fluent_expression.fluent().name)
+    return names
 
 
 def _ground_instances(problem: Problem, fluent) -> list | None:

@@ -76,14 +76,74 @@ def test_fully_initialised_function_is_not_reported(tmp_path):
     assert not [w for w in warnings if "'fuel'" in w]
 
 
-def test_every_instance_missing_is_reported_once(tmp_path):
-    warnings = _warnings(tmp_path, "(= (distance l1 l2) 10) (= (fuel t1) 1) (= (fuel t2) 1)")
-    distance = [w for w in warnings if "'distance'" in w]
-    assert len(distance) == 1
-    assert "3 of its 4 ground instances" in distance[0]
-    assert "distance(l1, l2)" not in distance[0]
-    # Comma-separated UPF rendering must not survive into the PDDL repair hint
-    assert "Add (= (distance l1 l1) <value>) to :init." in distance[0]
+COST_DOMAIN = """\
+(define (domain costs)
+  (:requirements :strips :typing :numeric-fluents)
+  (:types thing)
+  (:predicates (p ?x - thing))
+  (:functions (cost ?x - thing) (distance ?a - thing ?b - thing))
+  (:action spend
+    :parameters (?x - thing)
+    :precondition (p ?x)
+    :effect (decrease (cost ?x) 1))
+)
+"""
+
+
+def _cost_problem(init: str, objects: int = 4) -> str:
+    objs = " ".join(f"o{i}" for i in range(objects))
+    return f"""\
+(define (problem costs-p1)
+  (:domain costs)
+  (:objects {objs} - thing)
+  (:init (p o0) {init})
+  (:goal (p o0))
+)
+"""
+
+
+def test_partial_coverage_of_a_written_function_is_reported(tmp_path):
+    """`cost` is updated by `spend`, so every instance needs a value."""
+    paths = write_pddl_files(
+        tmp_path, COST_DOMAIN, _cost_problem("(= (cost o0) 5) (= (cost o1) 5)")
+    )
+    result, _ = check_syntax(paths["domain"], paths["problem"])
+
+    message = [w for w in result["warnings"] if "'cost'" in w]
+    assert len(message) == 1
+    assert "2 of its 4 ground instances" in message[0]
+    assert "cost(o0)" not in message[0]
+    assert "Add (= (cost o2) <value>) to :init." in message[0]
+
+
+def test_partial_coverage_of_a_static_table_is_not_reported(tmp_path):
+    """`(distance o0 o1)` only is normal for a static table nobody writes."""
+    paths = write_pddl_files(
+        tmp_path,
+        COST_DOMAIN,
+        _cost_problem(
+            "(= (cost o0) 5) (= (cost o1) 5) (= (cost o2) 5) (= (cost o3) 5)"
+            " (= (distance o0 o1) 10)"
+        ),
+    )
+    result, _ = check_syntax(paths["domain"], paths["problem"])
+
+    assert not [w for w in result["warnings"] if "'distance'" in w]
+
+
+def test_static_table_with_no_values_at_all_is_reported(tmp_path):
+    paths = write_pddl_files(
+        tmp_path,
+        COST_DOMAIN,
+        _cost_problem(
+            "(= (cost o0) 5) (= (cost o1) 5) (= (cost o2) 5) (= (cost o3) 5)"
+        ),
+    )
+    result, _ = check_syntax(paths["domain"], paths["problem"])
+
+    message = [w for w in result["warnings"] if "'distance'" in w]
+    assert len(message) == 1
+    assert "16 of its 16 ground instances" in message[0]
 
 
 def test_zero_arity_function_without_init_is_reported(tmp_path):

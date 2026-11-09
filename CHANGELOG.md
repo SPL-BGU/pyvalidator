@@ -60,7 +60,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   (validation aborted with a traceback). `_check_numeric_initialization` in
   `pyval/syntax_checker.py` now enumerates the ground instances of every
   numeric function and names the ones `:init` leaves out, with a valid PDDL
-  repair hint (`Add (= (fuel t2) <value>) to :init.`). The warning stays a
+  repair hint (`Add (= (fuel t2) <value>) to :init.`). It reports only the
+  instances that can bite: a function an action *writes* must have a value for
+  every object it ranges over, and a function with no values at all is reported
+  as a whole — a static table such as `(distance ?a ?b)` is routinely specified
+  only for the pairs that exist, and a plan that reads a missing pair now gets
+  the step-level error instead of a blanket warning. The warning stays a
   warning: a plan that never reads the instance is still valid. Functions with
   more than 250 ground instances are not enumerated and get a summary message
   instead.
@@ -72,9 +77,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   "every goal passed" — the same ambiguity 0.1.5 removed from the plain-text
   report, left in the machine-readable one. `phases.goals` is unchanged for
   existing consumers; `tests/test_json_output.py` covers both keys.
-- `tests/test_numeric_init.py`: partial initialisation, fully initialised
-  functions, zero-arity functions, summarised long lists, the enumeration bound,
-  and a guard against the "defaults to 0" claim coming back.
+- `tests/test_numeric_init.py`: partial coverage of a written function, static
+  tables left partially specified, zero-arity functions, summarised long lists,
+  the enumeration bound, and a guard against the "defaults to 0" claim coming
+  back.
 - `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
   report wording, the JSON field, and a CLI run that must not print a traceback.
 - `tests/test_tracking.py`: every accepted `--track` spelling, single-instance
