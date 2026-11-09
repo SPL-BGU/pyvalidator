@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Fixed
+- The Phase-1 "numeric function has no initial value" warning was decided per
+  declared function *name*, so initialising `(fuel t1)` silenced it for
+  `(fuel t2)` entirely, and the message claimed the missing value "defaults to
+  0". Neither is true: PDDL defines no default for numeric fluents and the
+  simulator raises `UPUsageError: The state ... does not have a value for the
+  value fuel(t2)` when a precondition or effect reads an unassigned instance
+  (validation aborted with a traceback). `_check_numeric_initialization` in
+  `pyval/syntax_checker.py` now enumerates the ground instances of every
+  numeric function and names the ones `:init` leaves out, with a valid PDDL
+  repair hint (`Add (= (fuel t2) <value>) to :init.`). The warning stays a
+  warning: a plan that never reads the instance is still valid. Functions with
+  more than 250 ground instances are not enumerated and get a summary message
+  instead.
+
+### Added
+- `tests/test_numeric_init.py`: partial initialisation, fully initialised
+  functions, zero-arity functions, summarised long lists, the enumeration bound,
+  and a guard against the "defaults to 0" claim coming back.
+
 ## [0.1.6] — 2026-11-09
 
 ### Fixed
