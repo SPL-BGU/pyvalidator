@@ -7,6 +7,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [Unreleased]
 
 ### Fixed
+- A plan step the simulator cannot evaluate no longer aborts validation with a
+  traceback. Reading (or writing) a numeric fluent instance that `:init` never
+  assigns makes UPF raise `UPUsageError` from `is_applicable`/`apply`, and
+  `PDDLValidator.validate` propagated it out to the CLI. `simulate` in
+  `pyval/plan_simulator.py` now catches the evaluation failure, stops the plan
+  there and records it on the step (`StepResult.evaluation_error`), naming the
+  fluent and the PDDL repair (`Add (= (fuel t2) <value>) to :init.`). The report
+  prints `✗ EVALUATION ERROR` and states that the plan could not be validated
+  rather than claiming it is invalid — the plan is not proven wrong, it simply
+  cannot be checked past that step. The JSON step carries `evaluation_error`.
 - The Phase-1 "numeric function has no initial value" warning was decided per
   declared function *name*, so initialising `(fuel t1)` silenced it for
   `(fuel t2)` entirely, and the message claimed the missing value "defaults to
@@ -25,6 +35,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `tests/test_numeric_init.py`: partial initialisation, fully initialised
   functions, zero-arity functions, summarised long lists, the enumeration bound,
   and a guard against the "defaults to 0" claim coming back.
+- `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
+  report wording, the JSON field, and a CLI run that must not print a traceback.
 
 ## [0.1.6] — 2026-11-09
 

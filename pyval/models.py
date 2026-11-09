@@ -44,6 +44,10 @@ class StepResult:
     boolean_changes: dict[str, bool] = field(default_factory=dict)
     numeric_changes: dict[str, NumericChange] = field(default_factory=dict)
     unsatisfied: list[PreconditionFailure] = field(default_factory=list)
+    # Set when the simulator could not evaluate the step at all (e.g. a numeric
+    # fluent with no value in the state). The plan is not proven invalid — it
+    # simply could not be checked past this point.
+    evaluation_error: str | None = None
 
 
 @dataclass

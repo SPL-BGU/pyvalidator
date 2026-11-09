@@ -7,6 +7,8 @@ import itertools
 from unified_planning.io import PDDLReader
 from unified_planning.model import Problem
 
+from pyval.pddl_format import as_pddl_call
+
 # Bound on how many ground instances of a numeric function we are willing to
 # enumerate when cross-checking :init. Object counts multiply, so a two-argument
 # function over a large domain explodes past any useful limit.
@@ -139,22 +141,10 @@ def _missing_init_warning(name: str, missing: list, total: int) -> str:
             f"Numeric function '{name}' has no initial value for "
             f"{len(missing)} of its {total} ground instances"
         )
-        example = f"(= {_as_pddl_call(rendered[0])} <value>)"
+        example = f"(= {as_pddl_call(rendered[0])} <value>)"
 
     return (
         f"{subject}: {listed}. PDDL assigns no default, so the simulator has no "
         f"value for them and any precondition or effect that reads one cannot be "
         f"evaluated. Add {example} to :init."
     )
-
-
-def _as_pddl_call(rendered: str) -> str:
-    """Turn UPF's ``fuel(t2)`` spelling into PDDL's ``(fuel t2)``."""
-    head, sep, rest = rendered.partition("(")
-    if not sep or not rest.endswith(")"):
-        return f"({rendered})"
-    arguments = " ".join(
-        argument.strip() for argument in rest[:-1].split(",") if argument.strip()
-    )
-    return f"({head.strip()} {arguments})" if arguments else f"({head.strip()})"
-

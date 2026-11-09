@@ -56,6 +56,9 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
                 changes = _format_changes(step)
                 if changes:
                     lines.append(f"  Changed: {changes}")
+            elif step.evaluation_error:
+                lines.append(f"Step {step.index}: {step.action} \u2717 EVALUATION ERROR")
+                lines.append(f"  {step.evaluation_error}")
             else:
                 lines.append(f"Step {step.index}: {step.action} \u2717 PRECONDITION FAILURE")
                 for failure in step.unsatisfied:
@@ -74,7 +77,15 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
     # that was not checked.
     if "execution" in result.phases:
         lines.append("=== Goal Check ===")
-        if result.is_valid:
+        unevaluable = _unevaluable_step(result)
+        if unevaluable is not None:
+            total = result.phases.get("execution", {}).get("total_steps", "?")
+            lines.append(
+                f"Plan could not be validated: step {unevaluable.index} of {total} "
+                f"({unevaluable.action}) could not be evaluated, so no verdict is "
+                f"given for the plan as a whole."
+            )
+        elif result.is_valid:
             lines.append("All goals satisfied. Plan is VALID.")
         else:
             if result.failed_step is not None:
@@ -161,6 +172,8 @@ def format_json(result: ValidationResult) -> dict:
                     },
                 }
             else:
+                if step.evaluation_error:
+                    step_dict["evaluation_error"] = step.evaluation_error
                 step_dict["unsatisfied_preconditions"] = [
                     {
                         "expression": f.expression,
@@ -194,6 +207,14 @@ def format_json(result: ValidationResult) -> dict:
         output["metric"] = result.metric
 
     return output
+
+
+def _unevaluable_step(result: ValidationResult):
+    """Return the first step the simulator could not evaluate, if any."""
+    for step in result.steps:
+        if step.evaluation_error:
+            return step
+    return None
 
 
 def _format_changes(step) -> str:
