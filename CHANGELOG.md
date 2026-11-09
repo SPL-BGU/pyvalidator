@@ -7,6 +7,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [Unreleased]
 
 ### Fixed
+- Plan quality metrics were silently dropped in two cases. `_evaluate_metric`
+  (`pyval/plan_simulator.py`) used `state.get_value`, which UPF asserts on for
+  arithmetic sub-expressions, so `(:metric minimize (+ (* 2 (fuel)) 5))` came
+  back as `metric: null` — exactly the bug the 0.1.4 goal fix addressed, left
+  behind on the metric path; it now evaluates through `StateEvaluator` (same
+  problem, `= 17.0`). And domains declaring `:action-costs` get a
+  `MinimizeActionCosts` metric, which is not an expression on the final state, so
+  `(:metric minimize (total-cost))` was dropped entirely; the plan cost is now
+  the sum of each executed action's declared cost, evaluated in the state it was
+  applied in. A metric that still cannot be evaluated is reported as `n/a` with
+  the reason instead of vanishing.
 - A step reported `✗ PRECONDITION FAILURE` with an empty explanation in two
   cases, both in `decompose_preconditions` (`pyval/diagnostics.py`). First, the
   `or` branch counted collected sub-failures instead of evaluating the
@@ -49,6 +60,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   and a guard against the "defaults to 0" claim coming back.
 - `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
   report wording, the JSON field, and a CLI run that must not print a traceback.
+- `tests/test_metrics.py`: plain and arithmetic metrics, `:action-costs`, the
+  report/JSON rendering, and a metric that cannot be evaluated.
 - `tests/test_precondition_diagnostics.py`: disjunctions with multi-conjunct
   disjuncts, quantified preconditions, object equality both ways, a conjunction
   reporting every failing conjunct, and an invariant that no `FAILED` step is

@@ -114,10 +114,14 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
 
     # Metric
     if result.metric:
+        value = result.metric.get("value")
+        rendered = "n/a" if value is None else value
         lines.append(
             f"Plan metric: {result.metric['type']} {result.metric['expression']} "
-            f"= {result.metric['value']}"
+            f"= {rendered}"
         )
+        if value is None and result.metric.get("unavailable"):
+            lines.append(f"  Metric could not be evaluated: {result.metric['unavailable']}")
 
     # Numeric summary
     if result.numeric_trajectory:

@@ -41,6 +41,9 @@ def simulate(
     tracker.record(0, None, state)
 
     steps: list[StepResult] = []
+    # (action instance, state it was applied in) — the pre-state is what an
+    # action-cost expression must be evaluated against.
+    executed: list[tuple[ActionInstance, object]] = []
 
     for idx, ai in enumerate(action_instances, start=1):
         action_display = _format_action(ai, original_names)
@@ -101,11 +104,12 @@ def simulate(
             boolean_changes=boolean_changes,
             numeric_changes=numeric_changes,
         ))
+        executed.append((ai, state))
         state = new_state
         tracker.record(idx, action_display, state)
 
     goal_results = check_goals(problem, state)
-    metric = _evaluate_metric(problem, state)
+    metric = _evaluate_metric(problem, state, executed)
 
     return (
         steps,
@@ -141,26 +145,83 @@ def _describe_evaluation_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: {first_line}"[:400]
 
 
-def _evaluate_metric(problem: Problem, final_state) -> dict | None:
-    """Evaluate plan quality metric against the final state."""
+def _evaluate_metric(
+    problem: Problem, final_state, executed: list[tuple[ActionInstance, object]] | None = None
+) -> dict | None:
+    """Evaluate plan quality metric against the final state.
+
+    Goes through UPF's ``StateEvaluator``: ``state.get_value`` asserts on
+    arithmetic sub-expressions, so a metric like
+    ``(:metric minimize (+ (* 2 (fuel)) 5))`` used to come back as ``None`` —
+    indistinguishable from a problem that declares no metric at all.
+
+    ``:action-costs`` domains carry ``MinimizeActionCosts``, which has no
+    single expression: the plan's cost is the sum of the per-action cost
+    expressions for the actions that actually executed, each evaluated in the
+    state it was applied in.
+    """
     from unified_planning.model.metrics import (
+        MinimizeActionCosts,
         MinimizeExpressionOnFinalState,
         MaximizeExpressionOnFinalState,
     )
+    from unified_planning.model.walkers import StateEvaluator
 
     for metric in problem.quality_metrics:
+        if isinstance(metric, MinimizeActionCosts):
+            return _evaluate_action_costs(problem, metric, executed or [])
         if isinstance(metric, (MinimizeExpressionOnFinalState, MaximizeExpressionOnFinalState)):
+            kind = "minimize" if isinstance(metric, MinimizeExpressionOnFinalState) else "maximize"
+            entry: dict = {
+                "type": kind,
+                "expression": str(metric.expression),
+                "value": None,
+            }
             try:
-                value = final_state.get_value(metric.expression)
-                kind = "minimize" if isinstance(metric, MinimizeExpressionOnFinalState) else "maximize"
-                return {
-                    "type": kind,
-                    "expression": str(metric.expression),
-                    "value": float(value.constant_value()),
-                }
-            except Exception:
-                return None
+                value = StateEvaluator(problem).evaluate(metric.expression, final_state)
+                entry["value"] = float(value.constant_value())
+            except Exception as exc:
+                entry["unavailable"] = _describe_metric_error(exc)
+            return entry
     return None
+
+
+def _evaluate_action_costs(
+    problem: Problem, metric, executed: list[tuple[ActionInstance, object]]
+) -> dict:
+    """Sum the declared cost of every action that executed."""
+    from unified_planning.model.walkers import StateEvaluator
+
+    entry: dict = {"type": "minimize", "expression": "action-costs", "value": None}
+    evaluator = StateEvaluator(problem)
+    total = 0.0
+
+    for instance, state_before in executed:
+        cost_expression = metric.get_action_cost(instance.action)
+        if cost_expression is None:
+            entry["unavailable"] = (
+                f"No cost is declared for action '{instance.action.name}', so the "
+                f"plan cost is incomplete"
+            )
+            return entry
+        substitutions = dict(zip(instance.action.parameters, instance.actual_parameters))
+        try:
+            grounded = (
+                cost_expression.substitute(substitutions) if substitutions else cost_expression
+            )
+            total += float(evaluator.evaluate(grounded, state_before).constant_value())
+        except Exception as exc:
+            entry["unavailable"] = _describe_metric_error(exc)
+            return entry
+
+    entry["value"] = total
+    return entry
+
+
+def _describe_metric_error(exc: Exception) -> str:
+    """One-line reason a metric expression could not be evaluated."""
+    message = str(exc).strip().splitlines()[0] if str(exc).strip() else "no message"
+    return f"{type(exc).__name__}: {message}"[:300]
 
 
 def _compute_changes(
