@@ -17,9 +17,10 @@ def decompose_preconditions(
     """
     failures: list[PreconditionFailure] = []
     param_map = dict(zip(action.parameters, parameters))
+    evaluator = StateEvaluator(problem)
 
     for prec in action.preconditions:
-        _evaluate_expr(prec, state, param_map, failures)
+        _evaluate_expr(prec, state, param_map, failures, evaluator)
 
     return failures
 
@@ -38,71 +39,180 @@ def _evaluate_expr(
     state,
     param_map: dict,
     failures: list[PreconditionFailure],
+    evaluator,
 ) -> None:
     """Recursively evaluate a precondition expression, collecting failures."""
     node_type = expr.node_type
 
     if node_type == OperatorKind.AND:
         for arg in expr.args:
-            _evaluate_expr(arg, state, param_map, failures)
+            _evaluate_expr(arg, state, param_map, failures, evaluator)
         return
 
     if node_type == OperatorKind.OR:
-        # Check if any disjunct is satisfied
-        sub_failures: list[PreconditionFailure] = []
-        for arg in expr.args:
-            _evaluate_expr(arg, state, param_map, sub_failures)
-        if len(sub_failures) == len(expr.args):
-            # None satisfied — report the OR as failed
-            failures.append(PreconditionFailure(
-                expression=_expr_to_pddl(expr, param_map),
-                type="boolean",
-                current_values={},
-                explanation="None of the disjuncts are satisfied",
-            ))
+        _evaluate_disjunction(expr, state, param_map, failures, evaluator)
         return
 
     if node_type == OperatorKind.NOT:
         inner = expr.args[0]
-        grounded = _substitute(inner, param_map)
-        try:
-            val = state.get_value(grounded)
-            if val.is_true():
-                failures.append(PreconditionFailure(
-                    expression=_expr_to_pddl(expr, param_map),
-                    type="boolean",
-                    current_values={_expr_to_pddl(inner, param_map): True},
-                    explanation=f"{_expr_to_pddl(inner, param_map)} is true but should be false",
-                ))
-        except Exception:
-            pass
+        verdict = _holds(expr, state, param_map, evaluator)
+        if verdict is False:
+            failures.append(PreconditionFailure(
+                expression=_expr_to_pddl(expr, param_map),
+                type="boolean",
+                current_values={_expr_to_pddl(inner, param_map): True},
+                explanation=f"{_expr_to_pddl(inner, param_map)} is true but should be false",
+            ))
+        elif verdict is None:
+            failures.append(_unevaluable_failure(expr, param_map))
         return
 
-    # Comparison operators: LE, LT, EQUALS (UPF normalizes >= to <= with swapped args)
+    # Comparison operators: LE, LT, EQUALS (UPF normalizes >= to <= with swapped args).
+    # EQUALS is also how `:equality` compares *objects*, which carries no numeric
+    # deficit and must not be reported as an unreadable numeric comparison.
     if node_type in (OperatorKind.LE, OperatorKind.LT, OperatorKind.EQUALS):
-        _evaluate_comparison(expr, state, param_map, failures)
+        if _is_numeric(expr.args[0]) and _is_numeric(expr.args[1]):
+            _evaluate_comparison(expr, state, param_map, failures)
+        else:
+            _evaluate_boolean(
+                expr,
+                state,
+                param_map,
+                failures,
+                evaluator,
+                unsatisfied="is not satisfied in the current state",
+            )
         return
 
     # Fluent expression (boolean)
     if expr.is_fluent_exp():
-        grounded = _substitute(expr, param_map)
-        try:
-            val = state.get_value(grounded)
-            if val.is_false():
-                failures.append(PreconditionFailure(
-                    expression=_expr_to_pddl(expr, param_map),
-                    type="boolean",
-                    current_values={_expr_to_pddl(expr, param_map): False},
-                    explanation=f"{_expr_to_pddl(expr, param_map)} is not true in the current state",
-                ))
-        except Exception:
-            failures.append(PreconditionFailure(
-                expression=_expr_to_pddl(expr, param_map),
-                type="boolean",
-                current_values={},
-                explanation=f"Could not evaluate {_expr_to_pddl(expr, param_map)}",
-            ))
+        _evaluate_boolean(
+            expr,
+            state,
+            param_map,
+            failures,
+            evaluator,
+            unsatisfied="is not true in the current state",
+        )
         return
+
+    # Everything else — quantifiers, implication, equivalence, object equality —
+    # used to fall through this function silently, so a failing quantified
+    # precondition produced a FAILED step with an empty explanation.
+    _evaluate_boolean(
+        expr,
+        state,
+        param_map,
+        failures,
+        evaluator,
+        unsatisfied="is not satisfied in the current state",
+    )
+
+
+def _evaluate_disjunction(
+    expr: FNode,
+    state,
+    param_map: dict,
+    failures: list[PreconditionFailure],
+    evaluator,
+) -> None:
+    """Report a disjunction only when no disjunct holds.
+
+    Counting sub-failures is not the same as evaluating the disjuncts: an
+    ``(and ...)`` disjunct contributes one failure per failing conjunct, so
+    ``(or (and (p) (q) (s)) (r))`` produced more "failures" than there were
+    disjuncts and the OR reported nothing at all — the failing step then showed
+    no unsatisfied precondition.
+    """
+    verdicts = [_holds(arg, state, param_map, evaluator) for arg in expr.args]
+    if any(verdict is True for verdict in verdicts):
+        return
+
+    rendered = _expr_to_pddl(expr, param_map)
+    disjuncts = [_expr_to_pddl(arg, param_map) for arg in expr.args]
+
+    if all(verdict is False for verdict in verdicts):
+        explanation = (
+            f"None of the {len(disjuncts)} disjuncts holds: " + "; ".join(disjuncts)
+        )
+    else:
+        unevaluable = [
+            disjunct
+            for disjunct, verdict in zip(disjuncts, verdicts)
+            if verdict is None
+        ]
+        explanation = (
+            "No disjunct could be shown to hold; the simulator raised on: "
+            + "; ".join(unevaluable)
+        )
+
+    failures.append(PreconditionFailure(
+        expression=rendered,
+        type="boolean",
+        current_values={},
+        explanation=explanation,
+    ))
+
+
+def _evaluate_boolean(
+    expr: FNode,
+    state,
+    param_map: dict,
+    failures: list[PreconditionFailure],
+    evaluator,
+    unsatisfied: str,
+) -> None:
+    """Report a boolean condition that does not hold, using UPF's evaluator."""
+    verdict = _holds(expr, state, param_map, evaluator)
+    if verdict is True:
+        return
+    if verdict is None:
+        failures.append(_unevaluable_failure(expr, param_map))
+        return
+
+    rendered = _expr_to_pddl(expr, param_map)
+    failures.append(PreconditionFailure(
+        expression=rendered,
+        type="boolean",
+        current_values={rendered: False},
+        explanation=f"{rendered} {unsatisfied}",
+    ))
+
+
+def _unevaluable_failure(expr: FNode, param_map: dict) -> PreconditionFailure:
+    """Build a failure for a condition the simulator could not evaluate."""
+    rendered = _expr_to_pddl(expr, param_map)
+    return PreconditionFailure(
+        expression=rendered,
+        type="boolean",
+        current_values={},
+        explanation=f"Could not evaluate {rendered}",
+    )
+
+
+def _holds(expr: FNode, state, param_map: dict, evaluator) -> bool | None:
+    """Return whether `expr` holds in `state`, or None when it cannot be evaluated.
+
+    Uses UPF's StateEvaluator so constants, arithmetic, quantifiers and object
+    equality evaluate the same way the simulator evaluates them.
+    """
+    grounded = _substitute(expr, param_map)
+    try:
+        value = evaluator.evaluate(grounded, state)
+    except Exception:
+        return None
+    if value.is_bool_constant():
+        return value.is_true()
+    return None
+
+
+def _is_numeric(expr: FNode) -> bool:
+    """Whether an expression denotes a number (as opposed to an object or bool)."""
+    try:
+        expr_type = expr.type
+    except Exception:
+        return False
+    return expr_type.is_int_type() or expr_type.is_real_type()
 
 
 def _evaluate_comparison(
@@ -124,7 +234,7 @@ def _evaluate_comparison(
             expression=_expr_to_pddl(expr, param_map),
             type="numeric",
             current_values={},
-            explanation=f"Could not evaluate numeric comparison",
+            explanation="Could not evaluate numeric comparison",
         ))
         return
 
@@ -194,22 +304,29 @@ def _evaluate_goal(expr: FNode, state, results: list[GoalResult], evaluator) -> 
         return
 
     if expr.node_type in (OperatorKind.LE, OperatorKind.LT, OperatorKind.EQUALS):
-        satisfied, current_values = _evaluate_comparison_goal(expr, state, evaluator)
+        if _is_numeric(expr.args[0]) and _is_numeric(expr.args[1]):
+            satisfied, current_values = _evaluate_comparison_goal(expr, state, evaluator)
+        else:
+            satisfied, current_values = _evaluate_boolean_goal(expr, state, evaluator)
     else:
-        satisfied = False
-        try:
-            val = evaluator.evaluate(expr, state)
-            if val.is_bool_constant():
-                satisfied = val.is_true()
-        except Exception:
-            pass
-        current_values = {str(expr): satisfied}
+        satisfied, current_values = _evaluate_boolean_goal(expr, state, evaluator)
 
     results.append(GoalResult(
         expression=str(expr),
         satisfied=satisfied,
         current_values=current_values,
     ))
+
+
+def _evaluate_boolean_goal(expr: FNode, state, evaluator) -> tuple[bool, dict]:
+    """Evaluate a non-numeric goal (fluent, NOT, quantified, object equality)."""
+    try:
+        value = evaluator.evaluate(expr, state)
+    except Exception:
+        return (False, {})
+    if value.is_bool_constant():
+        return (value.is_true(), {str(expr): value.is_true()})
+    return (False, {})
 
 
 def _evaluate_comparison_goal(expr: FNode, state, evaluator) -> tuple[bool, dict]:
@@ -238,4 +355,4 @@ def _expr_to_pddl(expr: FNode, param_map: dict | None = None) -> str:
     """Convert an FNode expression to a PDDL-like string."""
     if param_map:
         expr = _substitute(expr, param_map)
-    return str(expr)
+    return str(expr).replace(" == ", " = ")

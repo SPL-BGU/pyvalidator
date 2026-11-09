@@ -7,6 +7,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [Unreleased]
 
 ### Fixed
+- A step reported `✗ PRECONDITION FAILURE` with an empty explanation in two
+  cases, both in `decompose_preconditions` (`pyval/diagnostics.py`). First, the
+  `or` branch counted collected sub-failures instead of evaluating the
+  disjuncts, so `(or (and (p) (q) (s)) (r))` produced four "failures" for two
+  disjuncts and the mismatch suppressed the report entirely. Second, any node
+  the walker did not handle (quantifiers, implication, object equality) fell
+  through silently. Disjunctions are now decided by evaluating each disjunct
+  with UPF's `StateEvaluator`, and an unhandled node with a final branch that
+  reports when it does not hold. `:equality` comparisons between objects are no
+  longer routed through the numeric path (they used to answer "Could not
+  evaluate numeric comparison" with `type: "numeric"`); expressions render as
+  `(a = c)` rather than UPF's `(a == c)`.
 - A plan step the simulator cannot evaluate no longer aborts validation with a
   traceback. Reading (or writing) a numeric fluent instance that `:init` never
   assigns makes UPF raise `UPUsageError` from `is_applicable`/`apply`, and
@@ -37,6 +49,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   and a guard against the "defaults to 0" claim coming back.
 - `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
   report wording, the JSON field, and a CLI run that must not print a traceback.
+- `tests/test_precondition_diagnostics.py`: disjunctions with multi-conjunct
+  disjuncts, quantified preconditions, object equality both ways, a conjunction
+  reporting every failing conjunct, and an invariant that no `FAILED` step is
+  left without diagnostics.
 
 ## [0.1.6] — 2026-11-09
 
