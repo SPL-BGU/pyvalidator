@@ -6,6 +6,94 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Fixed
+- `--track` matched nothing for any parameterised fluent, so the README's own
+  `pyval domain.pddl problem.pddl plan.txt --trajectory --track fuel` printed
+  "No numeric fluents to display.". Two different comparisons were wrong: the
+  tracker compared a display name (`fuel truck1`) with the snapshot key
+  (`fuel(truck1)`), and `format_trajectory` compared the raw reference with that
+  same key. Both now go through `fluent_reference_matches`
+  (`pyval/numeric_tracker.py`), which accepts the bare function name (every
+  instance), the PDDL spelling (`fuel truck1`) and UPF's rendering
+  (`fuel(truck1)`). A reference matching nothing raises a result-level warning
+  naming the fluents that exist, printed in a new "Warnings" section and carried
+  in the JSON output, instead of an empty table.
+- Plan quality metrics were silently dropped in two cases. `_evaluate_metric`
+  (`pyval/plan_simulator.py`) used `state.get_value`, which UPF asserts on for
+  arithmetic sub-expressions, so `(:metric minimize (+ (* 2 (fuel)) 5))` came
+  back as `metric: null` — exactly the bug the 0.1.4 goal fix addressed, left
+  behind on the metric path; it now evaluates through `StateEvaluator` (same
+  problem, `= 17.0`). And domains declaring `:action-costs` get a
+  `MinimizeActionCosts` metric, which is not an expression on the final state, so
+  `(:metric minimize (total-cost))` was dropped entirely; the plan cost is now
+  the sum of each executed action's declared cost, evaluated in the state it was
+  applied in. A metric that still cannot be evaluated is reported as `n/a` with
+  the reason instead of vanishing.
+- A step reported `✗ PRECONDITION FAILURE` with an empty explanation in two
+  cases, both in `decompose_preconditions` (`pyval/diagnostics.py`). First, the
+  `or` branch counted collected sub-failures instead of evaluating the
+  disjuncts, so `(or (and (p) (q) (s)) (r))` produced four "failures" for two
+  disjuncts and the mismatch suppressed the report entirely. Second, any node
+  the walker did not handle (quantifiers, implication, object equality) fell
+  through silently. Disjunctions are now decided by evaluating each disjunct
+  with UPF's `StateEvaluator`, and an unhandled node with a final branch that
+  reports when it does not hold. `:equality` comparisons between objects are no
+  longer routed through the numeric path (they used to answer "Could not
+  evaluate numeric comparison" with `type: "numeric"`); expressions render as
+  `(a = c)` rather than UPF's `(a == c)`.
+- A plan step the simulator cannot evaluate no longer aborts validation with a
+  traceback. Reading (or writing) a numeric fluent instance that `:init` never
+  assigns makes UPF raise `UPUsageError` from `is_applicable`/`apply`, and
+  `PDDLValidator.validate` propagated it out to the CLI. `simulate` in
+  `pyval/plan_simulator.py` now catches the evaluation failure, stops the plan
+  there and records it on the step (`StepResult.evaluation_error`), naming the
+  fluent and the PDDL repair (`Add (= (fuel t2) <value>) to :init.`). The report
+  prints `✗ EVALUATION ERROR` and states that the plan could not be validated
+  rather than claiming it is invalid — the plan is not proven wrong, it simply
+  cannot be checked past that step. The JSON step carries `evaluation_error`.
+- The Phase-1 "numeric function has no initial value" warning was decided per
+  declared function *name*, so initialising `(fuel t1)` silenced it for
+  `(fuel t2)` entirely, and the message claimed the missing value "defaults to
+  0". Neither is true: PDDL defines no default for numeric fluents and the
+  simulator raises `UPUsageError: The state ... does not have a value for the
+  value fuel(t2)` when a precondition or effect reads an unassigned instance
+  (validation aborted with a traceback). `_check_numeric_initialization` in
+  `pyval/syntax_checker.py` now enumerates the ground instances of every
+  numeric function and names the ones `:init` leaves out, with a valid PDDL
+  repair hint (`Add (= (fuel t2) <value>) to :init.`). It reports only the
+  instances that can bite: a function an action *writes* must have a value for
+  every object it ranges over, and a function with no values at all is reported
+  as a whole — a static table such as `(distance ?a ?b)` is routinely specified
+  only for the pairs that exist, and a plan that reads a missing pair now gets
+  the step-level error instead of a blanket warning. The warning stays a
+  warning: a plan that never reads the instance is still valid. Functions with
+  more than 250 ground instances are not enumerated and get a summary message
+  instead.
+
+### Added
+- The JSON output carries `is_valid` and, when a plan was executed,
+  `phases.goal_check` with every goal and its verdict. `phases.goals` only ever
+  held the *unsatisfied* goals, so `null` meant both "no plan was executed" and
+  "every goal passed" — the same ambiguity 0.1.5 removed from the plain-text
+  report, left in the machine-readable one. `phases.goals` is unchanged for
+  existing consumers; `tests/test_json_output.py` covers both keys.
+- `tests/test_numeric_init.py`: partial coverage of a written function, static
+  tables left partially specified, zero-arity functions, summarised long lists,
+  the enumeration bound, and a guard against the "defaults to 0" claim coming
+  back.
+- `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
+  report wording, the JSON field, and a CLI run that must not print a traceback.
+- `tests/test_tracking.py`: every accepted `--track` spelling, single-instance
+  selection, the unknown-reference warning, and the README command end to end.
+- `tests/test_json_output.py`: `is_valid` on every status, every goal in
+  `goal_check`, and no `goal_check` when no plan ran.
+- `tests/test_metrics.py`: plain and arithmetic metrics, `:action-costs`, the
+  report/JSON rendering, and a metric that cannot be evaluated.
+- `tests/test_precondition_diagnostics.py`: disjunctions with multi-conjunct
+  disjuncts, quantified preconditions, object equality both ways, a conjunction
+  reporting every failing conjunct, and an invariant that no `FAILED` step is
+  left without diagnostics.
+
 ## [0.1.6] — 2026-11-09
 
 ### Fixed

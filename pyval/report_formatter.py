@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from pyval.numeric_tracker import fluent_reference_matches
+
 if TYPE_CHECKING:
     from pyval.models import ValidationResult
 
@@ -56,6 +58,9 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
                 changes = _format_changes(step)
                 if changes:
                     lines.append(f"  Changed: {changes}")
+            elif step.evaluation_error:
+                lines.append(f"Step {step.index}: {step.action} \u2717 EVALUATION ERROR")
+                lines.append(f"  {step.evaluation_error}")
             else:
                 lines.append(f"Step {step.index}: {step.action} \u2717 PRECONDITION FAILURE")
                 for failure in step.unsatisfied:
@@ -74,7 +79,15 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
     # that was not checked.
     if "execution" in result.phases:
         lines.append("=== Goal Check ===")
-        if result.is_valid:
+        unevaluable = _unevaluable_step(result)
+        if unevaluable is not None:
+            total = result.phases.get("execution", {}).get("total_steps", "?")
+            lines.append(
+                f"Plan could not be validated: step {unevaluable.index} of {total} "
+                f"({unevaluable.action}) could not be evaluated, so no verdict is "
+                f"given for the plan as a whole."
+            )
+        elif result.is_valid:
             lines.append("All goals satisfied. Plan is VALID.")
         else:
             if result.failed_step is not None:
@@ -103,10 +116,14 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
 
     # Metric
     if result.metric:
+        value = result.metric.get("value")
+        rendered = "n/a" if value is None else value
         lines.append(
             f"Plan metric: {result.metric['type']} {result.metric['expression']} "
-            f"= {result.metric['value']}"
+            f"= {rendered}"
         )
+        if value is None and result.metric.get("unavailable"):
+            lines.append(f"  Metric could not be evaluated: {result.metric['unavailable']}")
 
     # Numeric summary
     if result.numeric_trajectory:
@@ -118,6 +135,15 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
             parts = [f"{k} = {v}" for k, v in numeric_finals.items()]
             lines.append(f"Final state numeric values: {', '.join(parts)}")
 
+    # Result-level warnings (e.g. a --track request that matched nothing). Phase
+    # warnings were already printed with their phase; only print the others.
+    unreported = _unreported_warnings(result)
+    if unreported:
+        lines.append("")
+        lines.append("=== Warnings ===")
+        for warning in unreported:
+            lines.append(f"[WARNING] {warning}")
+
     return "\n".join(lines)
 
 
@@ -125,6 +151,7 @@ def format_json(result: ValidationResult) -> dict:
     """Format validation result as structured JSON dict."""
     output: dict = {
         "status": result.status,
+        "is_valid": result.is_valid,
         "phases": {},
     }
 
@@ -161,6 +188,8 @@ def format_json(result: ValidationResult) -> dict:
                     },
                 }
             else:
+                if step.evaluation_error:
+                    step_dict["evaluation_error"] = step.evaluation_error
                 step_dict["unsatisfied_preconditions"] = [
                     {
                         "expression": f.expression,
@@ -189,11 +218,44 @@ def format_json(result: ValidationResult) -> dict:
     else:
         output["phases"]["goals"] = None
 
+    # Goal check detail. `phases["goals"]` only ever held the *unsatisfied*
+    # goals, so `null` meant either "no plan was executed" or "every goal passed".
+    # Keyed on the execution phase instead, and carrying every goal evaluated.
+    if "execution" in result.phases:
+        output["phases"]["goal_check"] = [
+            {
+                "expression": g.expression,
+                "satisfied": g.satisfied,
+                "current_values": g.current_values,
+            }
+            for g in result.goal_results
+        ]
+
     # Metric
     if result.metric:
         output["metric"] = result.metric
 
+    if result.warnings:
+        output["warnings"] = result.warnings
+
     return output
+
+
+def _unreported_warnings(result: ValidationResult) -> list[str]:
+    """Warnings that the phase blocks did not already print."""
+    printed: list[str] = []
+    for phase in result.phases.values():
+        if isinstance(phase, dict):
+            printed.extend(phase.get("warnings", []))
+    return [warning for warning in result.warnings if warning not in printed]
+
+
+def _unevaluable_step(result: ValidationResult):
+    """Return the first step the simulator could not evaluate, if any."""
+    for step in result.steps:
+        if step.evaluation_error:
+            return step
+    return None
 
 
 def _format_changes(step) -> str:
@@ -216,8 +278,11 @@ def format_trajectory(
 
     # Filter if specific fluents requested
     if tracked:
-        tracked_set = set(tracked)
-        traj = {k: v for k, v in traj.items() if k in tracked_set}
+        traj = {
+            name: values
+            for name, values in traj.items()
+            if any(fluent_reference_matches(reference, name) for reference in tracked)
+        }
         if not traj:
             return "No matching numeric fluents found."
 

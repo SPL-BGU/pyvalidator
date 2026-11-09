@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
+import itertools
+
 from unified_planning.io import PDDLReader
 from unified_planning.model import Problem
+
+from pyval.pddl_format import as_pddl_call
+
+# Bound on how many ground instances of a numeric function we are willing to
+# enumerate when cross-checking :init. Object counts multiply, so a two-argument
+# function over a large domain explodes past any useful limit.
+_MAX_GROUND_INSTANCES = 250
+# Bound on how many missing instances one warning lists before summarising.
+_MAX_LISTED_MISSING = 6
 
 
 def check_syntax(
@@ -62,22 +73,100 @@ def _format_parse_error(
 
 
 def _check_numeric_initialization(problem: Problem) -> list[str]:
-    """Warn about numeric fluents with no explicit initial value (default 0)."""
-    warnings = []
-    declared_numeric_fluents = set()
-    initialized_fluents = set()
+    """Warn about numeric fluent instances that :init never assigns a value to.
+
+    PDDL defines no default for numeric fluents, and neither does the
+    simulator: a ``state.get_value`` on an unassigned instance raises
+    ``UPUsageError`` ("The state ... does not have a value for the value
+    fuel(t2)"), which used to abort validation with a traceback. The check is
+    per ground instance, not per declared name, because initialising
+    ``(fuel t1)`` says nothing about ``(fuel t2)``.
+
+    Only instances that matter are reported: a function an action *writes* must
+    have a value for every object it ranges over (the effect raises otherwise),
+    and a function with no initial value at all is reported as a whole. A static
+    table such as ``(distance ?a ?b)`` is routinely specified only for the pairs
+    that exist, so partial coverage there is not a defect — if a plan reads a
+    missing pair, the step reports it by name.
+    """
+    warnings: list[str] = []
+    modified = _functions_written_by_actions(problem)
 
     for fluent in problem.fluents:
-        if fluent.type.is_int_type() or fluent.type.is_real_type():
-            declared_numeric_fluents.add(fluent.name)
+        if not (fluent.type.is_int_type() or fluent.type.is_real_type()):
+            continue
 
-    for fluent_expr in problem.initial_values:
-        if fluent_expr.is_fluent_exp():
-            initialized_fluents.add(fluent_expr.fluent().name)
+        instances = _ground_instances(problem, fluent)
+        if instances is None:
+            if fluent.name in modified:
+                warnings.append(
+                    f"Numeric function '{fluent.name}' has more than "
+                    f"{_MAX_GROUND_INSTANCES} ground instances, so it was not "
+                    f"cross-checked against :init. No default value is assumed: "
+                    f"any instance that :init leaves out has no value in the state."
+                )
+            continue
 
-    for name in declared_numeric_fluents - initialized_fluents:
-        warnings.append(
-            f"Numeric function '{name}' has no initial value assigned — defaults to 0"
-        )
+        missing = [expr for expr in instances if expr not in problem.initial_values]
+        if not missing:
+            continue
+        if fluent.name in modified or len(missing) == len(instances):
+            warnings.append(_missing_init_warning(fluent.name, missing, len(instances)))
 
     return warnings
+
+
+def _functions_written_by_actions(problem: Problem) -> set[str]:
+    """Names of the functions some action effect assigns or updates."""
+    names: set[str] = set()
+    for action in problem.actions:
+        for effect in action.effects:
+            fluent_expression = getattr(effect, "fluent", None)
+            if fluent_expression is not None and fluent_expression.is_fluent_exp():
+                names.add(fluent_expression.fluent().name)
+    return names
+
+
+def _ground_instances(problem: Problem, fluent) -> list | None:
+    """Enumerate the ground instances of `fluent`, or None if there are too many."""
+    domains = []
+    total = 1
+    for parameter in fluent.signature:
+        objects = list(problem.objects(parameter.type))
+        if not objects:
+            # A parameter type with no objects has no ground instances at all.
+            return []
+        domains.append(objects)
+        total *= len(objects)
+        if total > _MAX_GROUND_INSTANCES:
+            return None
+
+    expression_manager = problem.environment.expression_manager
+    return [
+        expression_manager.FluentExp(fluent, tuple(combination))
+        for combination in itertools.product(*domains)
+    ]
+
+
+def _missing_init_warning(name: str, missing: list, total: int) -> str:
+    """Build a repair-oriented message naming the unassigned instances."""
+    rendered = [str(expr) for expr in missing[:_MAX_LISTED_MISSING]]
+    listed = ", ".join(rendered)
+    if len(missing) > _MAX_LISTED_MISSING:
+        listed += f", ... ({len(missing) - _MAX_LISTED_MISSING} more)"
+
+    if total == 1:
+        subject = f"Numeric function '{name}' has no initial value"
+        example = f"(= {rendered[0]} <value>)"
+    else:
+        subject = (
+            f"Numeric function '{name}' has no initial value for "
+            f"{len(missing)} of its {total} ground instances"
+        )
+        example = f"(= {as_pddl_call(rendered[0])} <value>)"
+
+    return (
+        f"{subject}: {listed}. PDDL assigns no default, so the simulator has no "
+        f"value for them and any precondition or effect that reads one cannot be "
+        f"evaluated. Add {example} to :init."
+    )

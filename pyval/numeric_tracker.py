@@ -25,13 +25,22 @@ class NumericTracker:
             else:
                 self._numeric_exprs.append(fluent_expr)
 
-        # Filter numeric fluents if tracking specific ones
+        # Filter numeric fluents if tracking specific ones. A reference may be
+        # the bare function name (`fuel`, every instance), or one instance in
+        # either spelling (`fuel truck1`, `fuel(truck1)`).
+        self.tracked_unknown: list[str] = []
         if tracked_fluents is not None:
-            tracked_set = set(tracked_fluents)
-            self._numeric_exprs = [
-                e for e in self._numeric_exprs
-                if _fluent_display_name(e) in tracked_set
+            kept = [
+                expr
+                for expr in self._numeric_exprs
+                if _matches_any(tracked_fluents, str(expr))
             ]
+            self.tracked_unknown = [
+                reference
+                for reference in tracked_fluents
+                if not _matches_any([reference], *(str(e) for e in self._numeric_exprs))
+            ]
+            self._numeric_exprs = kept
 
     def record(self, step: int, action: str | None, state) -> StateSnapshot:
         """Record a state snapshot at a given step."""
@@ -68,10 +77,60 @@ class NumericTracker:
         return trajectory
 
 
-def _fluent_display_name(expr) -> str:
-    """Extract a display name like 'fuel truck1' from a fluent expression."""
-    if expr.is_fluent_exp():
-        name = expr.fluent().name
-        args = " ".join(str(a) for a in expr.args)
-        return f"{name} {args}".strip() if args else name
-    return str(expr)
+def available_numeric_fluents(problem: Problem) -> list[str]:
+    """Names of the tracked-able numeric fluent instances, as `str(expr)`."""
+    return [
+        str(expr)
+        for expr, value in problem.initial_values.items()
+        if not value.is_bool_constant()
+    ]
+
+
+def fluent_reference_matches(reference: str, fluent_name: str) -> bool:
+    """Whether a user-supplied --track reference selects `fluent_name`.
+
+    Accepts the PDDL spelling, UPF's rendering and the bare function name:
+    ``fuel`` (all instances of `fuel`), ``fuel truck1``, ``fuel(truck1)`` and
+    ``fuel(truck1, ...)`` all select ``fuel(truck1)``. Before this, `--track`
+    compared the display name (`fuel truck1`) with the snapshot key
+    (`fuel(truck1)`), so no value ever matched and the table came back empty.
+    """
+    name, arguments = parse_fluent_reference(reference)
+    fluent, fluent_arguments = parse_fluent_reference(fluent_name)
+    if name != fluent:
+        return False
+    if arguments is None:
+        return True
+    return arguments == fluent_arguments
+
+
+def parse_fluent_reference(reference: str) -> tuple[str, tuple[str, ...] | None]:
+    """Split a fluent reference into (name, arguments or None).
+
+    ``None`` for the arguments means "every instance of this function".
+    """
+    text = reference.strip()
+    if text.startswith("(") and text.endswith(")"):
+        text = text[1:-1].strip()
+
+    head, separator, rest = text.partition("(")
+    if separator and rest.endswith(")"):
+        arguments = tuple(
+            argument.strip() for argument in rest[:-1].split(",") if argument.strip()
+        )
+        return head.strip(), arguments
+
+    parts = text.split()
+    if not parts:
+        return text, None
+    if len(parts) == 1:
+        return parts[0], None
+    return parts[0], tuple(parts[1:])
+
+
+def _matches_any(references, *fluent_names: str) -> bool:
+    return any(
+        fluent_reference_matches(reference, fluent_name)
+        for reference in references
+        for fluent_name in fluent_names
+    )

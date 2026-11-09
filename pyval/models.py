@@ -44,6 +44,10 @@ class StepResult:
     boolean_changes: dict[str, bool] = field(default_factory=dict)
     numeric_changes: dict[str, NumericChange] = field(default_factory=dict)
     unsatisfied: list[PreconditionFailure] = field(default_factory=list)
+    # Set when the simulator could not evaluate the step at all (e.g. a numeric
+    # fluent with no value in the state). The plan is not proven invalid — it
+    # simply could not be checked past this point.
+    evaluation_error: str | None = None
 
 
 @dataclass
@@ -56,6 +60,10 @@ class ValidationResult:
     numeric_trajectory: dict[str, list] = field(default_factory=dict)
     failed_step: int | None = None
     unsatisfied_goals: list[GoalResult] = field(default_factory=list)
+    # Every goal, satisfied or not. `unsatisfied_goals` stays the convenient
+    # subset; this is what lets the JSON output show that a goal check happened
+    # at all (an empty `unsatisfied_goals` is also what a syntax-only run gives).
+    goal_results: list[GoalResult] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     metric: dict | None = None  # {"type": "minimize"/"maximize", "expression": str, "value": float}
 

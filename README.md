@@ -62,11 +62,23 @@ PyVAL runs a three-phase pipeline and halts on the first fatal error:
 
 Unsupported PDDL features (durative actions, PDDL+ processes/events) are reported as warnings rather than silent failures.
 
+Numeric fluents have no default value in PDDL, so `:init` must assign every
+instance an action reads or writes. Phase 1 warns about the instances a written
+function leaves out; if the simulator still cannot evaluate a step at execution
+time, validation stops there and reports `EVALUATION ERROR` naming the fluent and
+the repair, instead of claiming the plan is invalid — an unevaluable step proves
+nothing about the plan.
+
 ## Output Modes
 
 - **Plain text** (default, VAL-like, optionally `-v` for per-step detail)
 - **JSON** (`--json`) — structured for programmatic consumption
 - **Trajectory** (`--trajectory`) — numeric fluent values per step, optionally filtered via `--track`
+
+`--track` accepts the bare function name (`--track fuel`, every instance of `fuel`),
+one instance in PDDL spelling (`--track "fuel truck1"`), or UPF's rendering
+(`--track "fuel(truck1)"`). A reference that matches no numeric fluent is reported
+as a warning listing the fluents that exist, rather than printing an empty table.
 
 ## Development
 
