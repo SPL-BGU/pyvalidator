@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+## [0.1.6] — 2026-11-09
+
+### Fixed
+- Plan steps whose action or object names differ in case from the parsed
+  domain/problem are no longer rejected. PDDL names are case-insensitive and
+  UPF's `PDDLReader` lower-cases domain and problem text, but plan tokens were
+  looked up exactly as written, so a plan using the declared capitalisation
+  (e.g. `(turn_to satellite0 Star0 GroundStation1)` against IPC satellite
+  p02–p05, or `(CRAFT_PLANK ...)` against `pogo_stick`) failed with
+  `"Action ... is not declared in domain"` / `"object ... is not declared in
+  problem"`. VAL accepts these plans. `_name_candidates` in
+  `pyval/validator.py` now also tries the lower-case form (and lower-case plus
+  `-`→`_`) after the existing candidates, so plans that already resolved pick
+  the same name as before. Error messages and step display still show the
+  name as written in the plan. Reported as ISS-027 in pddl-copilot-experiments.
+
+### Added
+- `tests/test_case_insensitivity.py`: upper-case object, upper-case action,
+  mixed case, `-`/`_` with and without upper case, written-case error
+  messages and step display, and a regression test on IPC satellite p02 with
+  its declared capitalisation (`tests/fixtures/satellite/`).
+
 ## [0.1.5] — 2026-05-19
 
 ### Fixed

@@ -246,9 +246,14 @@ def _lookup_object(problem: Problem, raw_name: str):
 
 
 def _name_candidates(name: str) -> list[str]:
-    """Return lookup candidates: original, then normalized (if different)."""
+    """Return lookup candidates, original name first.
+
+    PDDL names are case-insensitive and UPF's PDDLReader lower-cases domain
+    and problem text, so the lower-case form is also tried. Hyphens may be
+    stored as underscores, so the hyphen-normalized forms are tried too.
+    """
     candidates = [name]
-    normalized = name.replace("-", "_")
-    if normalized != name:
-        candidates.append(normalized)
+    for candidate in (name.replace("-", "_"), name.lower(), name.lower().replace("-", "_")):
+        if candidate not in candidates:
+            candidates.append(candidate)
     return candidates
