@@ -1,6 +1,6 @@
 """PyVAL — Pure Python PDDL plan validator."""
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 from pyval.models import (
     GoalResult,
