@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from pyval.numeric_tracker import fluent_reference_matches
+
 if TYPE_CHECKING:
     from pyval.models import ValidationResult
 
@@ -133,6 +135,15 @@ def format_plain_text(result: ValidationResult, verbose: bool = False) -> str:
             parts = [f"{k} = {v}" for k, v in numeric_finals.items()]
             lines.append(f"Final state numeric values: {', '.join(parts)}")
 
+    # Result-level warnings (e.g. a --track request that matched nothing). Phase
+    # warnings were already printed with their phase; only print the others.
+    unreported = _unreported_warnings(result)
+    if unreported:
+        lines.append("")
+        lines.append("=== Warnings ===")
+        for warning in unreported:
+            lines.append(f"[WARNING] {warning}")
+
     return "\n".join(lines)
 
 
@@ -224,7 +235,19 @@ def format_json(result: ValidationResult) -> dict:
     if result.metric:
         output["metric"] = result.metric
 
+    if result.warnings:
+        output["warnings"] = result.warnings
+
     return output
+
+
+def _unreported_warnings(result: ValidationResult) -> list[str]:
+    """Warnings that the phase blocks did not already print."""
+    printed: list[str] = []
+    for phase in result.phases.values():
+        if isinstance(phase, dict):
+            printed.extend(phase.get("warnings", []))
+    return [warning for warning in result.warnings if warning not in printed]
 
 
 def _unevaluable_step(result: ValidationResult):
@@ -255,8 +278,11 @@ def format_trajectory(
 
     # Filter if specific fluents requested
     if tracked:
-        tracked_set = set(tracked)
-        traj = {k: v for k, v in traj.items() if k in tracked_set}
+        traj = {
+            name: values
+            for name, values in traj.items()
+            if any(fluent_reference_matches(reference, name) for reference in tracked)
+        }
         if not traj:
             return "No matching numeric fluents found."
 

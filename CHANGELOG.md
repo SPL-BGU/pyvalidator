@@ -7,6 +7,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 ## [Unreleased]
 
 ### Fixed
+- `--track` matched nothing for any parameterised fluent, so the README's own
+  `pyval domain.pddl problem.pddl plan.txt --trajectory --track fuel` printed
+  "No numeric fluents to display.". Two different comparisons were wrong: the
+  tracker compared a display name (`fuel truck1`) with the snapshot key
+  (`fuel(truck1)`), and `format_trajectory` compared the raw reference with that
+  same key. Both now go through `fluent_reference_matches`
+  (`pyval/numeric_tracker.py`), which accepts the bare function name (every
+  instance), the PDDL spelling (`fuel truck1`) and UPF's rendering
+  (`fuel(truck1)`). A reference matching nothing raises a result-level warning
+  naming the fluents that exist, printed in a new "Warnings" section and carried
+  in the JSON output, instead of an empty table.
 - Plan quality metrics were silently dropped in two cases. `_evaluate_metric`
   (`pyval/plan_simulator.py`) used `state.get_value`, which UPF asserts on for
   arithmetic sub-expressions, so `(:metric minimize (+ (* 2 (fuel)) 5))` came
@@ -66,6 +77,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   and a guard against the "defaults to 0" claim coming back.
 - `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
   report wording, the JSON field, and a CLI run that must not print a traceback.
+- `tests/test_tracking.py`: every accepted `--track` spelling, single-instance
+  selection, the unknown-reference warning, and the README command end to end.
 - `tests/test_json_output.py`: `is_valid` on every status, every goal in
   `goal_check`, and no `goal_check` when no plan ran.
 - `tests/test_metrics.py`: plain and arithmetic metrics, `:action-costs`, the

@@ -6,6 +6,7 @@ from unified_planning.model import Problem
 from unified_planning.plans import ActionInstance
 
 from pyval.models import ValidationResult
+from pyval.numeric_tracker import available_numeric_fluents, fluent_reference_matches
 from pyval.syntax_checker import check_syntax
 
 
@@ -90,6 +91,7 @@ class PDDLValidator:
         }
 
         all_warnings = phase1_result["warnings"] + phase2_result["warnings"]
+        all_warnings.extend(_unmatched_tracking_warnings(problem, tracked_fluents))
 
         return ValidationResult(
             status="VALID" if is_valid else "INVALID",
@@ -104,6 +106,41 @@ class PDDLValidator:
             warnings=all_warnings,
             metric=metric,
         )
+
+
+def _unmatched_tracking_warnings(
+    problem: Problem, tracked_fluents: list[str] | None
+) -> list[str]:
+    """Warn about --track values that select no numeric fluent at all.
+
+    A typo used to produce an empty trajectory table with no explanation, which
+    reads exactly like a plan with no numeric fluents.
+    """
+    if not tracked_fluents:
+        return []
+
+    available = available_numeric_fluents(problem)
+    unmatched = [
+        reference
+        for reference in tracked_fluents
+        if not any(fluent_reference_matches(reference, name) for name in available)
+    ]
+    if not unmatched:
+        return []
+
+    listed = ", ".join(f"'{reference}'" for reference in unmatched)
+    if available:
+        shown = ", ".join(available[:10])
+        if len(available) > 10:
+            shown += f", ... ({len(available) - 10} more)"
+        return [
+            f"Tracking request {listed} matches no numeric fluent. "
+            f"Available: {shown}"
+        ]
+    return [
+        f"Tracking request {listed} matches no numeric fluent: this problem has "
+        f"no numeric fluents with an initial value."
+    ]
 
 
 def _validate_plan_structure(

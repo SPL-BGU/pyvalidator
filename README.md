@@ -68,6 +68,11 @@ Unsupported PDDL features (durative actions, PDDL+ processes/events) are reporte
 - **JSON** (`--json`) — structured for programmatic consumption
 - **Trajectory** (`--trajectory`) — numeric fluent values per step, optionally filtered via `--track`
 
+`--track` accepts the bare function name (`--track fuel`, every instance of `fuel`),
+one instance in PDDL spelling (`--track "fuel truck1"`), or UPF's rendering
+(`--track "fuel(truck1)"`). A reference that matches no numeric fluent is reported
+as a warning listing the fluents that exist, rather than printing an empty table.
+
 ## Development
 
 ```bash
