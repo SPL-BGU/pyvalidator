@@ -10,7 +10,6 @@ per declared name, so initialising ``(fuel t1)`` silenced the warning for
 from pyval.syntax_checker import check_syntax
 from tests.conftest import write_pddl_files
 
-
 NUMERIC_DOMAIN = """\
 (define (domain numinit)
   (:requirements :strips :typing :numeric-fluents)
@@ -193,7 +192,7 @@ def test_long_missing_list_is_summarised(tmp_path):
 """
     paths = write_pddl_files(tmp_path, domain, problem)
     result, _ = check_syntax(paths["domain"], paths["problem"])
-    message = [w for w in result["warnings"] if "'cost'" in w][0]
+    message = next(w for w in result["warnings"] if "'cost'" in w)
     assert "10 of its 10 ground instances" in message
     assert "4 more)" in message
 
@@ -221,6 +220,6 @@ def test_huge_ground_space_is_not_enumerated(tmp_path):
 """
     paths = write_pddl_files(tmp_path, domain, problem)
     result, _ = check_syntax(paths["domain"], paths["problem"])
-    message = [w for w in result["warnings"] if "'cost'" in w][0]
+    message = next(w for w in result["warnings"] if "'cost'" in w)
     assert "more than 250 ground instances" in message
     assert "No default value is assumed" in message

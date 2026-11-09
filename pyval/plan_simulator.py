@@ -161,9 +161,9 @@ def _evaluate_metric(
     state it was applied in.
     """
     from unified_planning.model.metrics import (
+        MaximizeExpressionOnFinalState,
         MinimizeActionCosts,
         MinimizeExpressionOnFinalState,
-        MaximizeExpressionOnFinalState,
     )
     from unified_planning.model.walkers import StateEvaluator
 

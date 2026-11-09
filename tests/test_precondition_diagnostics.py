@@ -16,7 +16,6 @@ from tests.conftest import (
     write_pddl_files,
 )
 
-
 DISJUNCT_DOMAIN = """\
 (define (domain disjuncts)
   (:requirements :strips :typing)

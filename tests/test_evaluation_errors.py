@@ -11,7 +11,6 @@ from pyval import PDDLValidator
 from pyval.report_formatter import format_json, format_plain_text
 from tests.conftest import write_pddl_files
 
-
 PARTIAL_DOMAIN = """\
 (define (domain partial)
   (:requirements :strips :typing :numeric-fluents)
@@ -131,6 +130,7 @@ def test_cli_survives_the_unevaluable_step(tmp_path):
         [sys.executable, "-m", "pyval.cli", paths["domain"], paths["problem"], paths["plan"]],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert completed.returncode == 1
     assert "Traceback" not in completed.stderr

@@ -133,14 +133,14 @@ def _unmatched_tracking_warnings(
         shown = ", ".join(available[:10])
         if len(available) > 10:
             shown += f", ... ({len(available) - 10} more)"
-        return [
+        return [(
             f"Tracking request {listed} matches no numeric fluent. "
             f"Available: {shown}"
-        ]
-    return [
+        )]
+    return [(
         f"Tracking request {listed} matches no numeric fluent: this problem has "
         f"no numeric fluents with an initial value."
-    ]
+    )]
 
 
 def _validate_plan_structure(

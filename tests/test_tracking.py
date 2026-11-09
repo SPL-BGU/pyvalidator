@@ -113,6 +113,7 @@ def test_cli_readme_command_tracks_fuel(tmp_path):
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     assert completed.returncode == 0
     assert "fuel(truck1)" in completed.stdout

@@ -11,7 +11,6 @@ from pyval import PDDLValidator
 from pyval.report_formatter import format_json, format_plain_text
 from tests.conftest import write_pddl_files
 
-
 PROBLEM = """\
 (define (problem metric-p1)
   (:domain metric)
