@@ -100,6 +100,7 @@ class PDDLValidator:
             numeric_trajectory=numeric_traj,
             failed_step=failed_step,
             unsatisfied_goals=unsatisfied_goals,
+            goal_results=goal_results,
             warnings=all_warnings,
             metric=metric,
         )

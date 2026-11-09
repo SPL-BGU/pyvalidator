@@ -140,6 +140,7 @@ def format_json(result: ValidationResult) -> dict:
     """Format validation result as structured JSON dict."""
     output: dict = {
         "status": result.status,
+        "is_valid": result.is_valid,
         "phases": {},
     }
 
@@ -205,6 +206,19 @@ def format_json(result: ValidationResult) -> dict:
         output["phases"]["goals"] = goals if goals else None
     else:
         output["phases"]["goals"] = None
+
+    # Goal check detail. `phases["goals"]` only ever held the *unsatisfied*
+    # goals, so `null` meant either "no plan was executed" or "every goal passed".
+    # Keyed on the execution phase instead, and carrying every goal evaluated.
+    if "execution" in result.phases:
+        output["phases"]["goal_check"] = [
+            {
+                "expression": g.expression,
+                "satisfied": g.satisfied,
+                "current_values": g.current_values,
+            }
+            for g in result.goal_results
+        ]
 
     # Metric
     if result.metric:

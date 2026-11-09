@@ -60,6 +60,10 @@ class ValidationResult:
     numeric_trajectory: dict[str, list] = field(default_factory=dict)
     failed_step: int | None = None
     unsatisfied_goals: list[GoalResult] = field(default_factory=list)
+    # Every goal, satisfied or not. `unsatisfied_goals` stays the convenient
+    # subset; this is what lets the JSON output show that a goal check happened
+    # at all (an empty `unsatisfied_goals` is also what a syntax-only run gives).
+    goal_results: list[GoalResult] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     metric: dict | None = None  # {"type": "minimize"/"maximize", "expression": str, "value": float}
 

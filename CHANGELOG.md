@@ -55,11 +55,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
   instead.
 
 ### Added
+- The JSON output carries `is_valid` and, when a plan was executed,
+  `phases.goal_check` with every goal and its verdict. `phases.goals` only ever
+  held the *unsatisfied* goals, so `null` meant both "no plan was executed" and
+  "every goal passed" — the same ambiguity 0.1.5 removed from the plain-text
+  report, left in the machine-readable one. `phases.goals` is unchanged for
+  existing consumers; `tests/test_json_output.py` covers both keys.
 - `tests/test_numeric_init.py`: partial initialisation, fully initialised
   functions, zero-arity functions, summarised long lists, the enumeration bound,
   and a guard against the "defaults to 0" claim coming back.
 - `tests/test_evaluation_errors.py`: the precondition and effect crash paths, the
   report wording, the JSON field, and a CLI run that must not print a traceback.
+- `tests/test_json_output.py`: `is_valid` on every status, every goal in
+  `goal_check`, and no `goal_check` when no plan ran.
 - `tests/test_metrics.py`: plain and arithmetic metrics, `:action-costs`, the
   report/JSON rendering, and a metric that cannot be evaluated.
 - `tests/test_precondition_diagnostics.py`: disjunctions with multi-conjunct
